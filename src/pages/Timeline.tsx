@@ -4,7 +4,7 @@ import type { Chapter, StageKey } from '../types';
 import { addDays, diffDays, fmtDate, maxDate, minDate, monthsBetween, today, toTime } from '../lib/date';
 import { CHAPTER_STATUS_COLOR, CHAPTER_STATUS_LABEL, STAGES, STAGE_LABEL } from '../lib/labels';
 import { download, downloadCsv } from '../lib/export';
-import { Badge, Field, Icon, PageHead, toast, usePersistentState } from '../components/ui';
+import { Badge, Field, Icon, Menu, PageHead, toast, usePersistentState } from '../components/ui';
 import { Legend } from '../components/charts';
 import { GanttUploads } from './GanttUploads';
 
@@ -56,7 +56,7 @@ export function Timeline() {
     <>
       <PageHead
         title="Timeline & Gantt charts"
-        subtitle="Visualise drafting, revising and advisor review for every chapter. Drag bars to reschedule, drag their edges to change length, and drag the ◆ to move a chapter deadline."
+        subtitle="Drag a bar to move it, drag its ends to change its length, and drag ◆ to move a deadline."
       />
       <div className="tabs" role="tablist">
         <button className="tab" role="tab" aria-selected={tab === 'timeline'} onClick={() => setTab('timeline')}>
@@ -78,6 +78,7 @@ function InteractiveTimeline() {
   const [shown, setShown] = usePersistentState<StageKey[]>('timeline-stages', ['drafting', 'revising', 'review']);
   const [hideDone, setHideDone] = usePersistentState('timeline-hidedone', false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [showOptions, setShowOptions] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const [history, setHistory] = useState<Chapter[][]>([]);
@@ -233,41 +234,17 @@ function InteractiveTimeline() {
 
   return (
     <>
-      <div className="filters" role="group" aria-label="Timeline controls">
-        <div className="field">
-          <span>Zoom</span>
-          <div className="seg">
+      <div className="filter-panel">
+        <div className="filter-row">
+          <div className="seg" role="group" aria-label="Zoom">
             {(Object.keys(ZOOMS) as Zoom[]).map((z) => (
               <button key={z} aria-pressed={zoom === z} onClick={() => setZoom(z)}>
                 {z[0].toUpperCase() + z.slice(1)}s
               </button>
             ))}
           </div>
-        </div>
-        <div className="field">
-          <span>Stages shown</span>
-          <div style={{ display: 'flex', gap: 10, height: 34, alignItems: 'center' }}>
-            {STAGES.map((s) => (
-              <label className="check" key={s.key}>
-                <input type="checkbox" checked={shown.includes(s.key)} onChange={() => setShown(shown.includes(s.key) ? shown.filter((x) => x !== s.key) : [...shown, s.key])} />
-                <span className="legend-swatch" style={{ background: s.color }} />
-                {s.label}
-              </label>
-            ))}
-          </div>
-        </div>
-        <label className="check" style={{ alignSelf: 'center' }} title="Moving or extending a stage shifts the later stages by the same amount">
-          <input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} /> Shift later stages
-        </label>
-        <label className="check" style={{ alignSelf: 'center' }}>
-          <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide completed chapters
-        </label>
-        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignSelf: 'center', flexWrap: 'wrap' }}>
-          <button className="btn btn-sm" onClick={undo} disabled={!history.length} title="Undo (Ctrl/⌘+Z)">
-            <Icon name="undo" size={14} /> Undo
-          </button>
           <button
-            className="btn btn-sm"
+            className="btn"
             onClick={() => {
               const el = scrollRef.current;
               if (el) el.scrollTo({ left: Math.max(0, X(now) - el.clientWidth * 0.3), behavior: 'smooth' });
@@ -275,13 +252,43 @@ function InteractiveTimeline() {
           >
             Today
           </button>
-          <button className="btn btn-sm" onClick={exportCsv}>
-            <Icon name="download" size={14} /> CSV
+          <button className="btn" onClick={undo} disabled={!history.length} title="Undo (Ctrl/⌘+Z)">
+            <Icon name="undo" size={14} /> Undo
           </button>
-          <button className="btn btn-sm" onClick={exportSvg}>
-            <Icon name="download" size={14} /> SVG
+          <button className={`btn${showOptions ? ' btn-active' : ''}`} aria-expanded={showOptions} onClick={() => setShowOptions(!showOptions)}>
+            <Icon name="settings" size={14} /> Options
           </button>
+          <div style={{ marginLeft: 'auto' }}>
+            <Menu
+              label="Export"
+              items={[
+                { label: 'Image (SVG)', hint: 'For slides or your committee', onClick: exportSvg },
+                { label: 'Spreadsheet (CSV)', hint: 'Import into Excel or a Gantt tool', onClick: exportCsv },
+              ]}
+            />
+          </div>
         </div>
+        {showOptions && (
+          <div className="filters" role="group" aria-label="Timeline options">
+            <div className="field">
+              <span>Show stages</span>
+              <div style={{ display: 'flex', gap: 12, minHeight: 34, alignItems: 'center', flexWrap: 'wrap' }}>
+                {STAGES.map((s) => (
+                  <label className="check" key={s.key}>
+                    <input type="checkbox" checked={shown.includes(s.key)} onChange={() => setShown(shown.includes(s.key) ? shown.filter((x) => x !== s.key) : [...shown, s.key])} />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label className="check" style={{ alignSelf: 'center' }}>
+              <input type="checkbox" checked={cascade} onChange={(e) => setCascade(e.target.checked)} /> When I move a stage, move the later stages too
+            </label>
+            <label className="check" style={{ alignSelf: 'center' }}>
+              <input type="checkbox" checked={hideDone} onChange={(e) => setHideDone(e.target.checked)} /> Hide finished chapters
+            </label>
+          </div>
+        )}
       </div>
 
       <Legend
@@ -289,6 +296,7 @@ function InteractiveTimeline() {
           ...STAGES.filter((s) => shown.includes(s.key)).map((s) => ({ label: s.label, color: s.color })),
           { label: 'Chapter deadline ◆', color: 'var(--ink)' },
           { label: 'Today', color: 'var(--critical)', kind: 'line' as const },
+          { label: 'Defense', color: 'var(--series-7)', kind: 'line' as const },
         ]}
       />
 
@@ -399,9 +407,7 @@ function InteractiveTimeline() {
         </div>
       </div>
       {chapters.length === 0 && <p className="empty">No chapters to show. Add chapters on the Chapters page.</p>}
-      <p className="muted" style={{ fontSize: 12.5, marginTop: 8 }}>
-        The violet line marks your planned defense ({fmtDate(data.profile.defenseDate)}). Changes save automatically; use Undo or Ctrl/⌘+Z to step back. Keyboard: focus a bar, then ←/→ (Shift = week, Alt = resize end).
-      </p>
+      <p className="hint">Changes save automatically. Click a chapter name to type exact dates.</p>
 
       {selectedChapter && <StageEditor chapter={selectedChapter} onChange={commit} onClose={() => setSelected(null)} />}
 

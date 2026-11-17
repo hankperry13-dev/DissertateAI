@@ -5,7 +5,7 @@ import { diffDays, fmtDate, today } from '../lib/date';
 import { fmtPct, uid } from '../lib/format';
 import { PUBLICATION_STATUSES, PUBLICATION_STATUS_LABEL, PUBLICATION_TYPES, PUB_PENDING } from '../lib/labels';
 import { downloadCsv } from '../lib/export';
-import { Badge, Empty, Field, Icon, Modal, PageHead, Stat, confirmDelete, toast, usePersistentState } from '../components/ui';
+import { Badge, Empty, Field, FilterPanel, Icon, Menu, Modal, PageHead, confirmDelete, toast, usePersistentState } from '../components/ui';
 
 export function Publications() {
   const { data, upsert, remove, chapterName } = useStore();
@@ -29,6 +29,19 @@ export function Publications() {
   const wins = decided.filter((p) => p.status !== 'rejected');
   const pending = rows.filter((p) => PUB_PENDING.includes(p.status));
 
+  const exportCsv = () =>
+    downloadCsv(`publications-${now}.csv`, rows, [
+                  { header: 'Title', value: (p) => p.title },
+                  { header: 'Venue', value: (p) => p.venue },
+                  { header: 'Type', value: (p) => p.type },
+                  { header: 'Status', value: (p) => PUBLICATION_STATUS_LABEL[p.status] },
+                  { header: 'Co-authors', value: (p) => p.coauthors },
+                  { header: 'Related chapter', value: (p) => (p.relatedChapterId ? chapterName(p.relatedChapterId) : '') },
+                  { header: 'Submitted', value: (p) => p.submittedOn },
+                  { header: 'Decision', value: (p) => p.decisionOn },
+                  { header: 'Notes', value: (p) => p.notes },
+                ]);
+
   const move = (id: string, status: PublicationStatus) => {
     const p = data.publications.find((x) => x.id === id);
     if (!p || p.status === status) return;
@@ -43,27 +56,10 @@ export function Publications() {
     <>
       <PageHead
         title="Publications"
-        subtitle="Track articles, book chapters, conference papers and reviews from idea to print. Drag cards between columns to update their status."
+        subtitle="From idea to print. Drag a card to a new column to update it."
         actions={
           <>
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(`publications-${now}.csv`, rows, [
-                  { header: 'Title', value: (p) => p.title },
-                  { header: 'Venue', value: (p) => p.venue },
-                  { header: 'Type', value: (p) => p.type },
-                  { header: 'Status', value: (p) => PUBLICATION_STATUS_LABEL[p.status] },
-                  { header: 'Co-authors', value: (p) => p.coauthors },
-                  { header: 'Related chapter', value: (p) => (p.relatedChapterId ? chapterName(p.relatedChapterId) : '') },
-                  { header: 'Submitted', value: (p) => p.submittedOn },
-                  { header: 'Decision', value: (p) => p.decisionOn },
-                  { header: 'Notes', value: (p) => p.notes },
-                ])
-              }
-            >
-              <Icon name="download" size={14} /> CSV
-            </button>
+            <Menu label="Export" items={[{ label: 'Spreadsheet (CSV)', hint: 'Publications in the current view', onClick: exportCsv }]} />
             <button
               className="btn btn-primary"
               onClick={() => setEditing({ id: uid('p'), title: '', venue: '', type: 'Journal article', status: 'idea', coauthors: '', relatedChapterId: chapter, submittedOn: '', decisionOn: '', notes: '' })}
@@ -74,10 +70,27 @@ export function Publications() {
         }
       />
 
-      <div className="filters" role="group" aria-label="Publication filters">
-        <Field label="Search">
-          <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Title, venue…" />
-        </Field>
+      <FilterPanel
+        active={(type ? 1 : 0) + (chapter ? 1 : 0)}
+        onClear={() => {
+          setType('');
+          setChapter('');
+        }}
+        lead={
+          <>
+            <input className="input search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title or venue…" aria-label="Search publications" />
+            <div className="seg" role="group" aria-label="View">
+              <button aria-pressed={view === 'board'} onClick={() => setView('board')}>
+                Board
+              </button>
+              <button aria-pressed={view === 'table'} onClick={() => setView('table')}>
+                Table
+              </button>
+            </div>
+          </>
+        }
+        summary={`${pending.length} awaiting a decision · ${wins.length} accepted or published${decided.length ? ` · ${fmtPct(wins.length / decided.length)} acceptance` : ''}`}
+      >
         <Field label="Type">
           <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All types</option>
@@ -96,26 +109,7 @@ export function Publications() {
             ))}
           </select>
         </Field>
-        <div className="field">
-          <span>View</span>
-          <div className="seg">
-            <button aria-pressed={view === 'board'} onClick={() => setView('board')}>
-              Board
-            </button>
-            <button aria-pressed={view === 'table'} onClick={() => setView('table')}>
-              Table
-            </button>
-          </div>
-        </div>
-        <span className="filters-note">{rows.length} items</span>
-      </div>
-
-      <div className="stats">
-        <Stat label="In progress" value={rows.filter((p) => p.status === 'idea' || p.status === 'drafting').length} sub="ideas and drafts" />
-        <Stat label="Awaiting decision" value={pending.length} sub={pending.length ? `oldest: ${Math.max(...pending.map((p) => (p.submittedOn ? diffDays(now, p.submittedOn) : 0)))} days` : 'nothing out'} />
-        <Stat label="Accepted or published" value={wins.length} sub={`${rows.filter((p) => p.status === 'published').length} in print`} />
-        <Stat label="Acceptance rate" value={decided.length ? fmtPct(wins.length / decided.length) : '—'} sub={`${decided.length} decisions so far`} />
-      </div>
+      </FilterPanel>
 
       {view === 'board' ? (
         <div className="board" role="list" aria-label="Publication pipeline">
@@ -230,9 +224,6 @@ export function Publications() {
                   <td className="row-actions">
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditing(structuredClone(p))} aria-label="Edit">
                       <Icon name="edit" size={14} />
-                    </button>
-                    <button className="btn btn-ghost btn-sm btn-danger" onClick={() => confirmDelete(`“${p.title}”`) && remove('publications', p.id)} aria-label="Delete">
-                      <Icon name="trash" size={14} />
                     </button>
                   </td>
                 </tr>

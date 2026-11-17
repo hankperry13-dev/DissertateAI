@@ -35,6 +35,9 @@ const ICONS = {
   file: <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" />,
   calendar: <path d="M4 6h16v15H4zM4 10h16M8 3v4M16 3v4" />,
   printer: <path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M6 14h12v7H6z" />,
+  chevron: <path d="m6 9 6 6 6-6" />,
+  filter: <path d="M3 5h18l-7 8.5V20l-4-2v-4.5z" />,
+  pen: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />,
 } as const;
 export type IconName = keyof typeof ICONS;
 
@@ -236,6 +239,116 @@ export function ChipSelect({ options, value, onChange }: { options: { value: str
           {o.label}
         </label>
       ))}
+    </div>
+  );
+}
+
+/** A single "Export ▾" style menu, so pages have one primary action instead of a row of buttons. */
+export function Menu({
+  label,
+  icon = 'download',
+  items,
+  align = 'right',
+}: {
+  label: string;
+  icon?: IconName;
+  items: { label: string; hint?: string; onClick: () => void; disabled?: boolean }[];
+  align?: 'left' | 'right';
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  return (
+    <div className="menu" ref={ref}>
+      <button className="btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={icon} size={14} /> {label} <Icon name="chevron" size={13} />
+      </button>
+      {open && (
+        <div className={`menu-pop${align === 'left' ? ' left' : ''}`} role="menu">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              role="menuitem"
+              className="menu-item"
+              disabled={it.disabled}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+            >
+              {it.label}
+              {it.hint && <small>{it.hint}</small>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Filters stay folded away behind one button (showing how many are on), so a
+ * page opens calm. `lead` is an always-visible control such as a search box.
+ */
+export function FilterPanel({
+  active,
+  onClear,
+  lead,
+  summary,
+  children,
+}: {
+  active: number;
+  onClear: () => void;
+  lead?: ReactNode;
+  summary?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="filter-panel no-print">
+      <div className="filter-row">
+        {lead}
+        <button className={`btn${active ? ' btn-active' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <Icon name="filter" size={14} /> Filters{active ? ` · ${active}` : ''}
+        </button>
+        {active > 0 && (
+          <button className="btn btn-ghost btn-sm" onClick={onClear}>
+            Clear
+          </button>
+        )}
+        {summary && <span className="filters-note">{summary}</span>}
+      </div>
+      {open && (
+        <div className="filters" role="group" aria-label="Filters">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Progressive disclosure: secondary content behind a single "Show more" button. */
+export function MoreSection({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  const [open, setOpen] = usePersistentState(`more-${id}`, false);
+  return (
+    <div className="more">
+      <button className="more-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span style={{ transform: open ? 'rotate(180deg)' : undefined, display: 'inline-flex' }}>
+          <Icon name="chevron" size={16} />
+        </span>
+        {open ? `Hide ${label.toLowerCase()}` : label}
+      </button>
+      {open && <div className="more-body">{children}</div>}
     </div>
   );
 }

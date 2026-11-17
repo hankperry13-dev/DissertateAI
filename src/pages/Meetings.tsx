@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { chapterLabel, sortedChapters, useStore } from '../store';
+import { chapterLabel, chapterShort, sortedChapters, useStore } from '../store';
 import type { ActionItem, Meeting, MeetingKind } from '../types';
 import { type DateFilter, fmtDate, inRange, relativeDays, resolveRange, today } from '../lib/date';
 import { uid } from '../lib/format';
 import { MEETING_KINDS } from '../lib/labels';
 import { download, downloadCsv } from '../lib/export';
-import { Badge, ChipSelect, DateRangeField, Empty, Field, Icon, Modal, PageHead, Stat, confirmDelete, defaultDateFilter, toast, usePersistentState } from '../components/ui';
+import { Badge, ChipSelect, DateRangeField, Empty, Field, FilterPanel, Icon, Menu, Modal, PageHead, confirmDelete, defaultDateFilter, toast, usePersistentState } from '../components/ui';
 
 const KIND_COLOR = Object.fromEntries(MEETING_KINDS.map((k) => [k.key, k.color])) as Record<MeetingKind, string>;
 
@@ -55,19 +55,8 @@ export function Meetings() {
   const overdue = open.filter((a) => a.due && a.due < now);
   const upcoming = rows.filter((m) => m.date >= now);
 
-  const toggle = (m: Meeting, a: ActionItem) => upsert('meetings', { ...m, actionItems: m.actionItems.map((x) => (x.id === a.id ? { ...x, done: !x.done } : x)) });
-
-  return (
-    <>
-      <PageHead
-        title="Meetings"
-        subtitle="Advisor and committee meetings, workshops and writing groups — with notes and action items."
-        actions={
-          <>
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(`meetings-${now}.csv`, rows, [
+  const exportCsv = () =>
+    downloadCsv(`meetings-${now}.csv`, rows, [
                   { header: 'Date', value: (m) => m.date },
                   { header: 'Time', value: (m) => m.time },
                   { header: 'Kind', value: (m) => m.kind },
@@ -77,14 +66,24 @@ export function Meetings() {
                   { header: 'Notes', value: (m) => m.notes },
                   { header: 'Open action items', value: (m) => m.actionItems.filter((a) => !a.done).map((a) => a.text).join('; ') },
                   { header: 'Completed action items', value: (m) => m.actionItems.filter((a) => a.done).map((a) => a.text).join('; ') },
-                ])
-              }
-            >
-              <Icon name="download" size={14} /> CSV
-            </button>
-            <button className="btn" disabled={!upcoming.length} onClick={() => download(`meetings-${now}.ics`, toIcs(upcoming, chapterName), 'text/calendar')} title="Upcoming meetings in the current filter">
-              <Icon name="calendar" size={14} /> Calendar (.ics)
-            </button>
+                ]);
+
+  const toggle = (m: Meeting, a: ActionItem) => upsert('meetings', { ...m, actionItems: m.actionItems.map((x) => (x.id === a.id ? { ...x, done: !x.done } : x)) });
+
+  return (
+    <>
+      <PageHead
+        title="Meetings"
+        subtitle="Notes and action items from every meeting."
+        actions={
+          <>
+            <Menu
+              label="Export"
+              items={[
+                { label: 'Spreadsheet (CSV)', hint: 'Meetings in the current view', onClick: exportCsv },
+                { label: 'Add to calendar (.ics)', hint: upcoming.length ? `${upcoming.length} upcoming meetings` : 'No upcoming meetings', disabled: !upcoming.length, onClick: () => download(`meetings-${now}.ics`, toIcs(upcoming, chapterName), 'text/calendar') },
+              ]}
+            />
             <button
               className="btn btn-primary"
               onClick={() => setEditing({ id: uid('m'), date: now, time: '10:00', kind: 'Advisor', attendees: data.profile.advisor, chapterIds: chapter ? [chapter] : [], agenda: '', notes: '', actionItems: [] })}
@@ -95,15 +94,35 @@ export function Meetings() {
         }
       />
 
-      <div className="filters" role="group" aria-label="Meeting filters">
+      <FilterPanel
+        active={(range.preset !== 'all' ? 1 : 0) + (kind ? 1 : 0) + (chapter ? 1 : 0) + (openOnly ? 1 : 0)}
+        onClear={() => {
+          setRange(defaultDateFilter);
+          setKind('');
+          setChapter('');
+          setOpenOnly(false);
+        }}
+        lead={
+          <div className="seg" role="group" aria-label="Show">
+            {(['upcoming', 'past', 'all'] as const).map((w) => (
+              <button key={w} aria-pressed={when === w} onClick={() => setWhen(w)}>
+                {w === 'all' ? 'All' : w === 'upcoming' ? 'Upcoming' : 'Past'}
+              </button>
+            ))}
+          </div>
+        }
+        summary={
+          <>
+            {rows.length} meetings · {open.length} open action items
+            {overdue.length > 0 && (
+              <span className="flag flag-critical" style={{ marginLeft: 8 }}>
+                <Icon name="alert" size={12} /> {overdue.length} overdue
+              </span>
+            )}
+          </>
+        }
+      >
         <DateRangeField value={range} onChange={setRange} />
-        <Field label="Show">
-          <select className="input" value={when} onChange={(e) => setWhen(e.target.value as typeof when)}>
-            <option value="all">Past & upcoming</option>
-            <option value="upcoming">Upcoming</option>
-            <option value="past">Past</option>
-          </select>
-        </Field>
         <Field label="Kind">
           <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="">All kinds</option>
@@ -123,31 +142,9 @@ export function Meetings() {
           </select>
         </Field>
         <label className="check" style={{ alignSelf: 'center' }}>
-          <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> With open action items
+          <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} /> Only with open action items
         </label>
-        <span className="filters-note">{rows.length} meetings</span>
-      </div>
-
-      <div className="stats">
-        <Stat label="Meetings" value={rows.length} sub={`${rows.filter((m) => m.kind === 'Advisor').length} with advisor`} />
-        <Stat label="Upcoming" value={upcoming.length} sub={upcoming.length ? `Next ${relativeDays([...upcoming].sort((a, b) => a.date.localeCompare(b.date))[0].date)}` : 'None scheduled'} />
-        <Stat label="Open action items" value={open.length} sub={`${items.length - open.length} completed`} />
-        <Stat
-          label="Overdue"
-          value={overdue.length}
-          sub={
-            overdue.length ? (
-              <span className="flag flag-critical">
-                <Icon name="alert" size={12} /> Needs attention
-              </span>
-            ) : (
-              <span className="flag flag-good">
-                <Icon name="check" size={12} /> All on track
-              </span>
-            )
-          }
-        />
-      </div>
+      </FilterPanel>
 
       <div className="table-wrap">
         <table className="table">
@@ -181,8 +178,8 @@ export function Meetings() {
                   <div style={{ marginTop: 4 }}>{m.attendees}</div>
                   {m.agenda && <div className="cell-sub">{m.agenda}</div>}
                   {m.chapterIds.map((id) => (
-                    <span className="tag" key={id}>
-                      {chapterName(id)}
+                    <span className="tag" key={id} title={chapterName(id)}>
+                      {chapterShort(data.chapters, id)}
                     </span>
                   ))}
                 </td>
@@ -191,26 +188,30 @@ export function Meetings() {
                 </td>
                 <td style={{ minWidth: 220 }}>
                   {m.actionItems.length === 0 && <span className="muted">—</span>}
-                  {m.actionItems.map((a) => (
-                    <label key={a.id} className="check" style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 4 }}>
-                      <input type="checkbox" checked={a.done} onChange={() => toggle(m, a)} style={{ marginTop: 3 }} />
-                      <span style={{ textDecoration: a.done ? 'line-through' : undefined, color: a.done ? 'var(--muted)' : undefined }}>
-                        {a.text}
-                        {a.due && !a.done && (
-                          <span className={`cell-sub${a.due < now ? ' flag flag-critical' : ''}`} style={{ marginLeft: 6 }}>
-                            {a.due < now && <Icon name="alert" size={11} />} due {fmtDate(a.due, { year: false })}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  ))}
+                  {m.actionItems
+                    .filter((a) => !a.done)
+                    .map((a) => (
+                      <label key={a.id} className="check" style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <input type="checkbox" checked={false} onChange={() => toggle(m, a)} style={{ marginTop: 3 }} />
+                        <span>
+                          {a.text}
+                          {a.due && (
+                            <span className={`cell-sub${a.due < now ? ' flag flag-critical' : ''}`} style={{ marginLeft: 6 }}>
+                              {a.due < now && <Icon name="alert" size={11} />} due {fmtDate(a.due, { year: false })}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+                  {m.actionItems.some((a) => a.done) && (
+                    <span className="cell-sub" title={m.actionItems.filter((a) => a.done).map((a) => a.text).join('\n')}>
+                      <Icon name="check" size={12} /> {m.actionItems.filter((a) => a.done).length} done
+                    </span>
+                  )}
                 </td>
                 <td className="row-actions">
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditing(structuredClone(m))} aria-label="Edit meeting">
                     <Icon name="edit" size={14} />
-                  </button>
-                  <button className="btn btn-ghost btn-sm btn-danger" onClick={() => confirmDelete('this meeting') && remove('meetings', m.id)} aria-label="Delete meeting">
-                    <Icon name="trash" size={14} />
                   </button>
                 </td>
               </tr>
@@ -223,6 +224,16 @@ export function Meetings() {
         <MeetingModal
           meeting={editing}
           onClose={() => setEditing(null)}
+          onDelete={
+            data.meetings.some((m) => m.id === editing.id)
+              ? () => {
+                  if (confirmDelete('this meeting')) {
+                    remove('meetings', editing.id);
+                    setEditing(null);
+                  }
+                }
+              : undefined
+          }
           onSave={(m) => {
             upsert('meetings', m);
             toast('Meeting saved');
@@ -234,7 +245,7 @@ export function Meetings() {
   );
 }
 
-function MeetingModal({ meeting, onClose, onSave }: { meeting: Meeting; onClose: () => void; onSave: (m: Meeting) => void }) {
+function MeetingModal({ meeting, onClose, onSave, onDelete }: { meeting: Meeting; onClose: () => void; onSave: (m: Meeting) => void; onDelete?: () => void }) {
   const { data } = useStore();
   const [m, setM] = useState(meeting);
   const [draft, setDraft] = useState('');
@@ -250,6 +261,11 @@ function MeetingModal({ meeting, onClose, onSave }: { meeting: Meeting; onClose:
       onClose={onClose}
       footer={
         <>
+          {onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: 'auto' }} onClick={onDelete}>
+              <Icon name="trash" size={14} /> Delete
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancel
           </button>

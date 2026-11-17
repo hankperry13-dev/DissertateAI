@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { chapterLabel, sortedChapters, useStore } from '../store';
+import { chapterLabel, chapterShort, sortedChapters, useStore } from '../store';
 import type { Citation, CitationStatus, CitationType } from '../types';
 import { today } from '../lib/date';
 import { uid } from '../lib/format';
 import { CITATION_STATUSES, CITATION_STATUS_LABEL, CITATION_TYPES } from '../lib/labels';
 import { chicago, download, downloadCsv, sortBibliography, toBibtex } from '../lib/export';
-import { SegmentedBar } from '../components/charts';
-import { Badge, ChipSelect, Empty, Field, Icon, Modal, PageHead, confirmDelete, toast, usePersistentState } from '../components/ui';
+import { Badge, ChipSelect, Empty, Field, FilterPanel, Icon, Menu, Modal, PageHead, confirmDelete, toast, usePersistentState } from '../components/ui';
 
 type SortKey = 'authors' | 'year' | 'title' | 'addedOn';
 
@@ -54,27 +53,9 @@ export function Citations() {
       .sort((a, b) => sort.dir * String(a[sort.key]).localeCompare(String(b[sort.key]), undefined, { numeric: true }));
   }, [data.citations, q, chapter, type, status, tag, sort]);
 
-  const filtered = rows.length !== data.citations.length;
   const fileStem = `citations-${today()}`;
-  const header = (key: SortKey, label: string) => (
-    <th aria-sort={sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
-      <button onClick={() => setSort({ key, dir: sort.key === key ? ((-sort.dir) as 1 | -1) : 1 })}>
-        {label} {sort.key === key ? (sort.dir === 1 ? '↑' : '↓') : ''}
-      </button>
-    </th>
-  );
-
-  return (
-    <>
-      <PageHead
-        title="Citations"
-        subtitle="Your working bibliography — secondary scholarship, primary texts and archival sources — linked to the chapters that use them."
-        actions={
-          <>
-            <button
-              className="btn"
-              onClick={() =>
-                downloadCsv(`${fileStem}.csv`, rows, [
+  const exportCsv = () =>
+    downloadCsv(`${fileStem}.csv`, rows, [
                   { header: 'Authors', value: (c) => c.authors },
                   { header: 'Title', value: (c) => c.title },
                   { header: 'Year', value: (c) => c.year },
@@ -89,17 +70,30 @@ export function Citations() {
                   { header: 'Tags', value: (c) => c.tags.join('; ') },
                   { header: 'Notes', value: (c) => c.notes },
                   { header: 'Added', value: (c) => c.addedOn },
-                ])
-              }
-            >
-              <Icon name="download" size={14} /> CSV
-            </button>
-            <button className="btn" onClick={() => download(`${fileStem}.bib`, toBibtex(rows), 'application/x-bibtex')}>
-              <Icon name="download" size={14} /> BibTeX
-            </button>
-            <button className="btn" onClick={() => download(`${fileStem}-chicago.md`, `# Bibliography\n\n${sortBibliography(rows).map((c) => chicago(c)).join('\n\n')}\n`, 'text/markdown')}>
-              <Icon name="download" size={14} /> Chicago bibliography
-            </button>
+                ]);
+  const header = (key: SortKey, label: string) => (
+    <th aria-sort={sort.key === key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+      <button onClick={() => setSort({ key, dir: sort.key === key ? ((-sort.dir) as 1 | -1) : 1 })}>
+        {label} {sort.key === key ? (sort.dir === 1 ? '↑' : '↓') : ''}
+      </button>
+    </th>
+  );
+
+  return (
+    <>
+      <PageHead
+        title="Citations"
+        subtitle="Your working bibliography, linked to chapters."
+        actions={
+          <>
+            <Menu
+              label="Export"
+              items={[
+                { label: 'Chicago bibliography', hint: 'Markdown, sorted by author', onClick: () => download(`${fileStem}-chicago.md`, `# Bibliography\n\n${sortBibliography(rows).map((c) => chicago(c)).join('\n\n')}\n`, 'text/markdown') },
+                { label: 'BibTeX (.bib)', hint: 'For Zotero, LaTeX, etc.', onClick: () => download(`${fileStem}.bib`, toBibtex(rows), 'application/x-bibtex') },
+                { label: 'Spreadsheet (CSV)', onClick: exportCsv },
+              ]}
+            />
             <button className="btn btn-primary" onClick={() => setEditing({ ...blank(), chapterIds: chapter && chapter !== '_none' ? [chapter] : [] })}>
               <Icon name="plus" size={14} /> Add source
             </button>
@@ -107,10 +101,17 @@ export function Citations() {
         }
       />
 
-      <div className="filters" role="group" aria-label="Citation filters">
-        <Field label="Search">
-          <input className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Author, title, tag…" style={{ minWidth: 220 }} />
-        </Field>
+      <FilterPanel
+        active={[chapter, type, status, tag].filter(Boolean).length}
+        onClear={() => {
+          setChapter('');
+          setType('');
+          setStatus('');
+          setTag('');
+        }}
+        lead={<input className="input search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search author, title, tag…" aria-label="Search citations" />}
+        summary={`${rows.length} of ${data.citations.length} sources`}
+      >
         <Field label="Chapter">
           <select className="input" value={chapter} onChange={(e) => setChapter(e.target.value)}>
             <option value="">All chapters</option>
@@ -148,37 +149,7 @@ export function Citations() {
             ))}
           </select>
         </Field>
-        {filtered && (
-          <button
-            className="btn btn-ghost btn-sm"
-            style={{ alignSelf: 'center' }}
-            onClick={() => {
-              setQ('');
-              setChapter('');
-              setType('');
-              setStatus('');
-              setTag('');
-            }}
-          >
-            Clear filters
-          </button>
-        )}
-        <span className="filters-note">
-          {rows.length} of {data.citations.length} sources · exports use the filtered list
-        </span>
-      </div>
-
-      {rows.length > 0 && (
-        <section className="card" style={{ marginBottom: 16 }}>
-          <div className="card-head">
-            <div>
-              <h2>Reading status</h2>
-              <p>How far along the {filtered ? 'filtered ' : ''}sources are, from “to read” to cited in a chapter</p>
-            </div>
-          </div>
-          <SegmentedBar parts={CITATION_STATUSES.map((s) => ({ key: s.key, label: s.label, color: s.color, ink: s.key === 'to_read' ? 'var(--ord-1-ink)' : undefined, value: rows.filter((c) => c.status === s.key).length }))} />
-        </section>
-      )}
+      </FilterPanel>
 
       <div className="table-wrap">
         <table className="table">
@@ -209,16 +180,11 @@ export function Citations() {
                     <em>{c.title}</em>
                   </div>
                   <div className="cell-sub">{[c.container, c.volume, c.publisher, c.place].filter(Boolean).join(' · ')}</div>
-                  {c.tags.map((t) => (
-                    <span className="tag" key={t}>
-                      {t}
-                    </span>
-                  ))}
                 </td>
                 <td className="tnum">{c.year}</td>
                 <td>{c.type}</td>
                 <td className="ink-2" style={{ fontSize: 12.5 }}>
-                  {c.chapterIds.length ? c.chapterIds.map(chapterName).join(', ') : '—'}
+                  {c.chapterIds.length ? c.chapterIds.map((id) => <span className="tag" key={id} title={chapterName(id)}>{chapterShort(data.chapters, id)}</span>) : '—'}
                 </td>
                 <td>
                   <select
@@ -239,9 +205,6 @@ export function Citations() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setEditing(structuredClone(c))} aria-label={`Edit ${c.title}`}>
                     <Icon name="edit" size={14} />
                   </button>
-                  <button className="btn btn-ghost btn-sm btn-danger" onClick={() => confirmDelete(`“${c.title}”`) && remove('citations', c.id)} aria-label={`Delete ${c.title}`}>
-                    <Icon name="trash" size={14} />
-                  </button>
                 </td>
               </tr>
             ))}
@@ -253,6 +216,16 @@ export function Citations() {
         <CitationModal
           citation={editing}
           onClose={() => setEditing(null)}
+          onDelete={
+            data.citations.some((c) => c.id === editing.id)
+              ? () => {
+                  if (confirmDelete(`“${editing.title}”`)) {
+                    remove('citations', editing.id);
+                    setEditing(null);
+                  }
+                }
+              : undefined
+          }
           onSave={(c) => {
             upsert('citations', c);
             toast('Source saved');
@@ -264,7 +237,7 @@ export function Citations() {
   );
 }
 
-function CitationModal({ citation, onClose, onSave }: { citation: Citation; onClose: () => void; onSave: (c: Citation) => void }) {
+function CitationModal({ citation, onClose, onSave, onDelete }: { citation: Citation; onClose: () => void; onSave: (c: Citation) => void; onDelete?: () => void }) {
   const { data } = useStore();
   const [c, setC] = useState(citation);
   const [tags, setTags] = useState(citation.tags.join(', '));
@@ -279,6 +252,11 @@ function CitationModal({ citation, onClose, onSave }: { citation: Citation; onCl
       onClose={onClose}
       footer={
         <>
+          {onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: 'auto' }} onClick={onDelete}>
+              <Icon name="trash" size={14} /> Delete
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancel
           </button>

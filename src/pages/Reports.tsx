@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { chapterLabel, sortedChapters, useStore } from '../store';
 import { applyFilter, describeFilter, type Filtered, type GlobalFilter } from '../lib/filters';
 import { diffDays, fmtDate, fmtMonth, monthKey, today, type DateFilter } from '../lib/date';
@@ -6,7 +6,7 @@ import { fmtNum, fmtPct } from '../lib/format';
 import { CHAPTER_STATUS_LABEL, CITATION_STATUS_LABEL, PUBLICATION_STATUS_LABEL, PUB_PENDING, STAGES } from '../lib/labels';
 import { chicago, download, downloadCsv, safeFilename, sortBibliography, toBibtex } from '../lib/export';
 import type { AppData } from '../types';
-import { DateRangeField, Field, Icon, PageHead, usePersistentState } from '../components/ui';
+import { DateRangeField, Field, Icon, Menu, PageHead, usePersistentState } from '../components/ui';
 
 type Section = 'summary' | 'chapters' | 'writing' | 'meetings' | 'actions' | 'publications' | 'bibliography';
 
@@ -134,6 +134,7 @@ export function Reports() {
   });
   const f = useMemo(() => applyFilter(data, st.filter), [data, st.filter]);
   const docRef = useRef<HTMLDivElement>(null);
+  const [custom, setCustom] = useState(false);
   const now = today();
   const stem = `${safeFilename(st.title)}-${now}`;
 
@@ -214,7 +215,7 @@ th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e5e5e5;vertical-a
   return (
     <>
       <div className="no-print">
-        <PageHead title="Reports & export" subtitle="Build a report for your advisor, committee or graduate school, preview it, then print to PDF or download it." />
+        <PageHead title="Reports" subtitle="Pick a template, check the preview, then print or download." />
 
         <section className="card" style={{ marginBottom: 16 }}>
           <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
@@ -252,35 +253,36 @@ th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e5e5e5;vertical-a
               </select>
             </Field>
           </div>
-          <div className="field" style={{ marginTop: 14 }}>
-            <span>Sections</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-              {SECTIONS.map((s) => (
-                <label className="check" key={s.key}>
-                  <input type="checkbox" checked={st.sections.includes(s.key)} onChange={() => toggle(s.key)} />
-                  {s.label}
-                </label>
-              ))}
+          {custom && (
+            <div className="field" style={{ marginTop: 14 }}>
+              <span>Sections</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+                {SECTIONS.map((s) => (
+                  <label className="check" key={s.key}>
+                    <input type="checkbox" checked={st.sections.includes(s.key)} onChange={() => toggle(s.key)} />
+                    {s.label}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
             <button className="btn btn-primary" onClick={() => window.print()}>
               <Icon name="printer" size={14} /> Print / save as PDF
             </button>
-            <button className="btn" onClick={downloadHtml}>
-              <Icon name="download" size={14} /> HTML
-            </button>
-            <button className="btn" onClick={() => download(`${stem}.md`, toMarkdown(data, f, st, chapterName), 'text/markdown')}>
-              <Icon name="download" size={14} /> Markdown
-            </button>
-            <button className="btn" onClick={exportCsvs} title="One CSV per section, for spreadsheets">
-              <Icon name="download" size={14} /> CSV files
-            </button>
-            <button className="btn" onClick={() => download(`${stem}.bib`, toBibtex(f.citations), 'application/x-bibtex')}>
-              <Icon name="download" size={14} /> BibTeX
-            </button>
-            <button className="btn" onClick={() => download(`dissertateai-backup-${now}.json`, JSON.stringify(data, null, 2), 'application/json')}>
-              <Icon name="download" size={14} /> Full backup (JSON)
+            <Menu
+              align="left"
+              label="Other formats"
+              items={[
+                { label: 'Web page (HTML)', hint: 'Opens in any browser; easy to email', onClick: downloadHtml },
+                { label: 'Markdown (.md)', hint: 'Paste into Word, Google Docs or notes', onClick: () => download(`${stem}.md`, toMarkdown(data, f, st, chapterName), 'text/markdown') },
+                { label: 'Spreadsheets (CSV)', hint: 'One file per section', onClick: exportCsvs },
+                { label: 'BibTeX (.bib)', hint: 'Sources in this report', onClick: () => download(`${stem}.bib`, toBibtex(f.citations), 'application/x-bibtex') },
+                { label: 'Full backup (JSON)', hint: 'Everything, to restore later', onClick: () => download(`dissertateai-backup-${now}.json`, JSON.stringify(data, null, 2), 'application/json') },
+              ]}
+            />
+            <button className="btn btn-ghost" aria-expanded={custom} onClick={() => setCustom(!custom)} style={{ marginLeft: 'auto' }}>
+              {custom ? 'Done choosing sections' : 'Choose sections…'}
             </button>
           </div>
         </section>

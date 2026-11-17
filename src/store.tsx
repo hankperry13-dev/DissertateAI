@@ -125,3 +125,10 @@ export function chapterLabel(c: Pick<Chapter, 'number' | 'title'>): string {
 export function sortedChapters(chapters: Chapter[]): Chapter[] {
   return [...chapters].sort((a, b) => a.number - b.number);
 }
+
+/** Very short chapter tag for dense tables: "Intro", "Ch. 3". */
+export function chapterShort(chapters: Chapter[], id: string): string {
+  const c = chapters.find((x) => x.id === id);
+  if (!c) return '—';
+  return c.number === 0 ? 'Intro' : `Ch. ${c.number}`;
+}

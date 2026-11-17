@@ -5,7 +5,7 @@ import { addDays, fmtDate, inRange, resolveRange, today, type DateFilter } from 
 import { fmtNum, fmtPct, uid } from '../lib/format';
 import { CHAPTER_STATUSES, CHAPTER_STATUS_COLOR, CHAPTER_STATUS_LABEL, STAGES } from '../lib/labels';
 import { downloadCsv } from '../lib/export';
-import { Badge, DateRangeField, Empty, Field, Icon, Modal, PageHead, confirmDelete, defaultDateFilter, toast, usePersistentState } from '../components/ui';
+import { Badge, DateRangeField, Empty, Field, FilterPanel, Icon, Menu, Modal, PageHead, confirmDelete, defaultDateFilter, toast, usePersistentState } from '../components/ui';
 
 export function newChapter(number: number): Chapter {
   const t = today();
@@ -30,6 +30,7 @@ export function Chapters() {
   const { data, upsert, remove, chapterName } = useStore();
   const [editing, setEditing] = useState<Chapter | null>(null);
   const [logging, setLogging] = useState<WritingSession | null>(null);
+  const saveSession = useSaveSession();
   const [range, setRange] = usePersistentState<DateFilter>('sessions-range', { ...defaultDateFilter, preset: '90' });
   const [chFilter, setChFilter] = usePersistentState('sessions-chapter', '');
   const [kind, setKind] = usePersistentState('sessions-kind', '');
@@ -72,13 +73,17 @@ export function Chapters() {
   return (
     <>
       <PageHead
-        title="Chapters & writing"
-        subtitle="Each chapter’s stage, length and deadlines, plus a log of your writing sessions."
+        title="Chapters"
+        subtitle="Where each chapter stands, and your writing log."
         actions={
           <>
-            <button className="btn" onClick={exportChapters}>
-              <Icon name="download" size={14} /> Chapters CSV
-            </button>
+            <Menu
+              label="Export"
+              items={[
+                { label: 'Chapters (CSV)', hint: 'Stages, word counts, deadlines', onClick: exportChapters },
+                { label: 'Writing log (CSV)', hint: 'Sessions matching the log filters', onClick: exportSessions },
+              ]}
+            />
             <button className="btn btn-primary" onClick={() => setEditing(newChapter(chapters.length ? Math.max(...chapters.map((c) => c.number)) + 1 : 1))}>
               <Icon name="plus" size={14} /> Add chapter
             </button>
@@ -115,8 +120,9 @@ export function Chapters() {
               return (
                 <tr key={c.id}>
                   <td>
-                    <div className="cell-title">{c.number === 0 ? c.title : `${c.number}. ${c.title}`}</div>
-                    {c.notes && <div className="cell-sub">{c.notes}</div>}
+                    <div className="cell-title" title={c.notes || undefined}>
+                      {c.number === 0 ? c.title : `${c.number}. ${c.title}`}
+                    </div>
                   </td>
                   <td>
                     <Badge color={CHAPTER_STATUS_COLOR[c.status]}>{CHAPTER_STATUS_LABEL[c.status]}</Badge>
@@ -144,13 +150,6 @@ export function Chapters() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setEditing(structuredClone(c))} aria-label={`Edit ${c.title}`}>
                       <Icon name="edit" size={14} />
                     </button>
-                    <button
-                      className="btn btn-ghost btn-sm btn-danger"
-                      aria-label={`Delete ${c.title}`}
-                      onClick={() => confirmDelete(`“${c.title}”`) && remove('chapters', c.id)}
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
                   </td>
                 </tr>
               );
@@ -163,24 +162,23 @@ export function Chapters() {
         <div>
           <h2 style={{ fontSize: 18 }}>Writing log</h2>
           <p>
-            {sessions.length} sessions · {fmtNum(total)} words · {fmtNum(sessions.reduce((s, x) => s + x.minutes, 0) / 60)} hours
+            {sessions.length} sessions · {fmtNum(total)} words
           </p>
         </div>
         <div className="head-actions">
-          <button className="btn" onClick={exportSessions}>
-            <Icon name="download" size={14} /> Log CSV
-          </button>
-          <button
-            className="btn btn-primary"
-            disabled={!chapters.length}
-            onClick={() => setLogging({ id: uid('s'), date: now, chapterId: chFilter || chapters.find((c) => c.status === 'drafting' || c.status === 'revising')?.id || chapters[0]?.id || '', words: 500, minutes: 90, kind: 'drafting', note: '' })}
-          >
-            <Icon name="plus" size={14} /> Log session
-          </button>
+          <LogSessionButton defaultChapterId={chFilter} />
         </div>
       </header>
 
-      <div className="filters" role="group" aria-label="Writing log filters">
+      <FilterPanel
+        active={(range.preset !== '90' ? 1 : 0) + (chFilter ? 1 : 0) + (kind ? 1 : 0)}
+        onClear={() => {
+          setRange({ ...defaultDateFilter, preset: '90' });
+          setChFilter('');
+          setKind('');
+        }}
+        summary={range.preset === '90' ? 'Last 90 days' : undefined}
+      >
         <DateRangeField value={range} onChange={setRange} />
         <Field label="Chapter">
           <select className="input" value={chFilter} onChange={(e) => setChFilter(e.target.value)}>
@@ -199,7 +197,7 @@ export function Chapters() {
             <option value="revising">Revising</option>
           </select>
         </Field>
-      </div>
+      </FilterPanel>
 
       <div className="table-wrap" style={{ maxHeight: 520, overflowY: 'auto' }}>
         <table className="table">
@@ -236,9 +234,6 @@ export function Chapters() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setLogging({ ...s })} aria-label="Edit session">
                     <Icon name="edit" size={14} />
                   </button>
-                  <button className="btn btn-ghost btn-sm btn-danger" onClick={() => confirmDelete('this session') && remove('sessions', s.id)} aria-label="Delete session">
-                    <Icon name="trash" size={14} />
-                  </button>
                 </td>
               </tr>
             ))}
@@ -250,6 +245,16 @@ export function Chapters() {
         <ChapterModal
           chapter={editing}
           onClose={() => setEditing(null)}
+          onDelete={
+            data.chapters.some((c) => c.id === editing.id)
+              ? () => {
+                  if (confirmDelete(`“${editing.title}”`)) {
+                    remove('chapters', editing.id);
+                    setEditing(null);
+                  }
+                }
+              : undefined
+          }
           onSave={(c) => {
             upsert('chapters', c);
             toast('Chapter saved');
@@ -263,11 +268,14 @@ export function Chapters() {
           isNew={!data.sessions.some((s) => s.id === logging.id)}
           chapters={chapters}
           onClose={() => setLogging(null)}
+          onDelete={() => {
+            if (confirmDelete('this session')) {
+              remove('sessions', logging.id);
+              setLogging(null);
+            }
+          }}
           onSave={(s, addToCount) => {
-            upsert('sessions', s);
-            const ch = data.chapters.find((c) => c.id === s.chapterId);
-            if (addToCount && ch && s.kind === 'drafting') upsert('chapters', { ...ch, wordCount: ch.wordCount + s.words });
-            toast('Session logged');
+            saveSession(s, addToCount);
             setLogging(null);
           }}
         />
@@ -276,7 +284,7 @@ export function Chapters() {
   );
 }
 
-function ChapterModal({ chapter, onClose, onSave }: { chapter: Chapter; onClose: () => void; onSave: (c: Chapter) => void }) {
+function ChapterModal({ chapter, onClose, onSave, onDelete }: { chapter: Chapter; onClose: () => void; onSave: (c: Chapter) => void; onDelete?: () => void }) {
   const [c, setC] = useState(chapter);
   const valid = c.title.trim() && STAGES.every((s) => c.stages[s.key].start <= c.stages[s.key].end);
   return (
@@ -285,6 +293,11 @@ function ChapterModal({ chapter, onClose, onSave }: { chapter: Chapter; onClose:
       onClose={onClose}
       footer={
         <>
+          {onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: 'auto' }} onClick={onDelete}>
+              <Icon name="trash" size={14} /> Delete
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
@@ -346,12 +359,14 @@ function SessionModal({
   chapters,
   onClose,
   onSave,
+  onDelete,
 }: {
   session: WritingSession;
   isNew: boolean;
   chapters: Chapter[];
   onClose: () => void;
   onSave: (s: WritingSession, addToCount: boolean) => void;
+  onDelete?: () => void;
 }) {
   const [s, setS] = useState(session);
   const [add, setAdd] = useState(isNew);
@@ -361,6 +376,11 @@ function SessionModal({
       onClose={onClose}
       footer={
         <>
+          {onDelete && (
+            <button className="btn btn-danger" style={{ marginRight: 'auto' }} onClick={onDelete}>
+              <Icon name="trash" size={14} /> Delete
+            </button>
+          )}
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
@@ -406,5 +426,46 @@ function SessionModal({
         )}
       </div>
     </Modal>
+  );
+}
+
+function useSaveSession() {
+  const { data, upsert } = useStore();
+  return (s: WritingSession, addToCount: boolean) => {
+    upsert('sessions', s);
+    const ch = data.chapters.find((c) => c.id === s.chapterId);
+    if (addToCount && ch && s.kind === 'drafting') upsert('chapters', { ...ch, wordCount: ch.wordCount + s.words });
+    toast(`Logged ${fmtNum(s.words)} words — nice work`);
+  };
+}
+
+/** One-click "Log writing" used on Home and Chapters. Pre-fills today and the chapter you're working on. */
+export function LogSessionButton({ defaultChapterId = '', primary = true }: { defaultChapterId?: string; primary?: boolean }) {
+  const { data } = useStore();
+  const save = useSaveSession();
+  const [s, setS] = useState<WritingSession | null>(null);
+  const chapters = sortedChapters(data.chapters);
+  const open = () => {
+    const ch = chapters.find((c) => c.id === defaultChapterId) ?? chapters.find((c) => c.status === 'drafting' || c.status === 'revising') ?? chapters[0];
+    setS({ id: uid('s'), date: today(), chapterId: ch?.id ?? '', words: 500, minutes: 60, kind: ch?.status === 'revising' ? 'revising' : 'drafting', note: '' });
+  };
+  return (
+    <>
+      <button className={`btn${primary ? ' btn-primary' : ''}`} disabled={!chapters.length} onClick={open}>
+        <Icon name="pen" size={14} /> Log writing
+      </button>
+      {s && (
+        <SessionModal
+          session={s}
+          isNew
+          chapters={chapters}
+          onClose={() => setS(null)}
+          onSave={(x, add) => {
+            save(x, add);
+            setS(null);
+          }}
+        />
+      )}
+    </>
   );
 }

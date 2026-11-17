@@ -10,13 +10,13 @@ import { Timeline } from './pages/Timeline';
 import { Reports } from './pages/Reports';
 
 const ROUTES: { path: string; label: string; icon: IconName; el: () => JSX.Element }[] = [
-  { path: 'overview', label: 'Overview', icon: 'home', el: Overview },
-  { path: 'chapters', label: 'Chapters & writing', icon: 'book', el: Chapters },
-  { path: 'timeline', label: 'Timeline & Gantt', icon: 'gantt', el: Timeline },
+  { path: 'overview', label: 'Home', icon: 'home', el: Overview },
+  { path: 'chapters', label: 'Chapters', icon: 'book', el: Chapters },
+  { path: 'timeline', label: 'Timeline', icon: 'gantt', el: Timeline },
   { path: 'citations', label: 'Citations', icon: 'quote', el: Citations },
   { path: 'meetings', label: 'Meetings', icon: 'users', el: Meetings },
   { path: 'publications', label: 'Publications', icon: 'send', el: Publications },
-  { path: 'reports', label: 'Reports & export', icon: 'report', el: Reports },
+  { path: 'reports', label: 'Reports', icon: 'report', el: Reports },
 ];
 
 function currentPath() {
@@ -89,7 +89,7 @@ export function App() {
           </button>
           <button className="nav-link" style={{ border: 0, background: 'none', cursor: 'pointer' }} onClick={() => setSettings(true)} title="Settings & data">
             <Icon name="settings" />
-            <span>Settings & data</span>
+            <span>Settings</span>
           </button>
         </div>
       </nav>

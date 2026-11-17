@@ -4,6 +4,16 @@ A dissertation dashboard for advanced PhD students and dissertation writers in t
 
 Everything runs in the browser and data stays on your machine (`localStorage` for records, IndexedDB for uploaded files). There is no server or account.
 
+## Designed to stay calm
+
+The interface is kept deliberately simple, using design patterns that help people with ADHD focus:
+
+- **Home answers "what now?"** It shows one big countdown to the next milestone, a short to-do list you can tick off right there, three key numbers and one chart. The other charts wait behind **Show more charts**.
+- **One main button per page.** Exports are grouped into a single **Export ▾** menu.
+- **Filters stay folded away** behind a **Filters** button, which shows how many filters are on.
+- **Delete is in the edit dialog**, never a red icon on every row. Finished action items collapse to "✓ 2 done".
+- **One-click Log writing** is pre-filled with today's date and the chapter you're working on.
+
 ## Getting started
 
 ```bash
@@ -13,23 +23,23 @@ npm run build      # type-check + production build into dist/
 npm run preview    # serve the production build
 ```
 
-The first time you open it, the dashboard loads a sample dissertation so every chart has something in it. Open **Settings & data** to enter your own details, or choose **Start fresh** to clear the sample.
+The first time you open it, the dashboard loads a sample dissertation so every chart has something in it. Open **Settings** to enter your own details, or choose **Start fresh** to clear the sample.
 
 ## Pages
 
 | Page | What it does |
 |---|---|
-| **Overview** | Stat tiles (words drafted vs. target, chapters complete, pace needed to finish by your defense, sources cited, meetings, items under review) and charts: chapter progress, stage mix, cumulative words, writing by month, meetings per month, citations by chapter, sources by type, publication pipeline. The date range and chapter filters apply to every figure on the page. Each chart has a **Table** toggle. |
-| **Chapters & writing** | Chapter list with stage, word count, stage dates and deadline. Late chapters are flagged. A writing log (date, chapter, drafting/revising, words, minutes) with filters. Logging a drafting session can add its words to the chapter's count. |
-| **Timeline & Gantt** | **Interactive timeline:** each chapter's Drafting, Revising and Advisor-review bars. Drag a bar to move it, drag its edges to resize it, and drag the ◆ to move the chapter deadline. *Shift later stages* moves the later stages along with the one you drag. You also get undo (Ctrl/⌘+Z), zoom (weeks/months/quarters), Today and defense markers, a date editor for the selected chapter, and CSV/SVG export. Keyboard: focus a bar and press ←/→ (Shift = a week, Alt = resize the end). **Uploaded Gantt charts:** drag in, choose or paste files exported from MS Project, GanttProject, TeamGantt, Office Timeline, Excel and other tools, and attach them to a chapter. PNG/JPG/SVG/PDF preview inline. .mpp/.gan/.xlsx/.csv files are stored so you can download them again. |
-| **Citations** | Working bibliography: monographs, articles, archival and primary sources. You can tag sources, link them to chapters and track reading status (to read → read → annotated → cited). Search and filter by chapter, type, status and tag. Exports to **CSV**, **BibTeX** and a **Chicago-style bibliography**, all of which use the filtered list. |
-| **Meetings** | Advisor, committee, workshop and writing-group meetings with notes and action items you can tick off (overdue items are flagged). Filters for date, kind, chapter and open items. Exports to **CSV** and **.ics** (upcoming meetings, for your calendar). |
-| **Publications** | Kanban board from Idea to Published/Declined, with drag-and-drop between columns. Moving a card fills in submission and decision dates. Also has a table view, filters, acceptance rate, days under review and CSV export. |
-| **Reports & export** | Templates (monthly advisor update, annual progress review, committee packet, publications for CV, bibliography). Pick the sections, date range and chapter, then preview. Download as **Print / PDF**, **HTML**, **Markdown**, **CSV files**, **BibTeX**, or a full **JSON backup**. |
+| **Home** | Next up (countdown to the next stage end, deadline or meeting), a to-do list from your meetings, words drafted, chapters done, days to defense, and chapter progress. **Show more charts** opens filterable charts: words over time, writing by month, meetings per month, citations by chapter, sources by type and the publication pipeline. Every chart has a **Table** view. |
+| **Chapters** | Each chapter's stage, word count, current stage dates and deadline. Late chapters are flagged. Below it is your writing log. **Log writing** can also add the new words to the chapter's count. |
+| **Timeline** | **Interactive timeline:** each chapter has Drafting, Revising and Advisor-review bars. Drag a bar to move it, drag its ends to change its length, and drag ◆ to move the deadline. The toolbar has Zoom, Today, Undo (also Ctrl/⌘+Z) and **Options**: which stages to show, whether moving a stage also moves the later stages, and hiding finished chapters. Click a chapter name to type exact dates. Keyboard: focus a bar and press ←/→ (Shift = a week, Alt = change the end date). Export as SVG or CSV. **Uploaded Gantt charts:** drop in, choose or paste files from MS Project, GanttProject, TeamGantt, Office Timeline, Excel and other tools, and attach them to a chapter. PNG/JPG/SVG/PDF preview inline. Other formats are stored so you can download them again. |
+| **Citations** | Your working bibliography, with tags, linked chapters and reading status (to read → read → annotated → cited). Search, plus filters for chapter, type, status and tag. Export a **Chicago bibliography**, **BibTeX** or **CSV** of whatever is filtered. |
+| **Meetings** | Choose Upcoming, Past or All. Notes, plus action items you can tick off (overdue ones are flagged). Export CSV, or **.ics** to add upcoming meetings to your calendar. |
+| **Publications** | A board from Idea to Published/Declined. Drag cards between columns, and submission and decision dates fill in automatically. There's also a table view, plus awaiting-decision and acceptance-rate counts. |
+| **Reports** | Pick a template (monthly advisor update, annual review, committee packet, publications for CV, bibliography), check the preview, then **Print / save as PDF**, or use **Other formats** for HTML, Markdown, CSV, BibTeX or a JSON backup. **Choose sections…** lets you customise. |
 
 ## Your data
 
-- Use **Settings & data → Download backup** to save everything as JSON, and **Restore from backup** to load it on another computer or browser.
+- Use **Settings → Download backup** to save everything as JSON, and **Restore from backup** to load it on another computer or browser.
 - Uploaded Gantt files are kept in IndexedDB and are **not** included in the JSON backup.
 - Clearing site data in your browser deletes the dashboard's data, so keep regular backups.
 
